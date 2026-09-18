@@ -1,0 +1,47 @@
+From 3b0ba6effc8a836396d71f458a33aa0920131bfb Mon Sep 17 00:00:00 2001
+From: "Owen (via Claude Code)" <amasoonog@gmail.com>
+Date: Fri, 18 Sep 2026 17:13:49 +0000
+Subject: [PATCH] Survive a corrupt 'hidden' entry in localStorage
+
+The Set was built from JSON.parse at module scope, so a corrupt value threw
+before any of the app ran and the page came up blank with no way back except
+clearing storage by hand. A valid non-array (say an object) threw too, since
+it is not iterable. Parse defensively and fall back to an empty Set.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018e7RTNjjvqCLb4X1QyVZTp
+---
+ web/app.js | 13 ++++++++++++-
+ 1 file changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/web/app.js b/web/app.js
+index eec3aee..d2e5979 100644
+--- a/web/app.js
++++ b/web/app.js
+@@ -1,11 +1,22 @@
+ 'use strict';
+ 
+ // ---------- state ----------
++// A corrupt 'hidden' entry used to throw here, before any of the app ran, so
++// the page came up blank with no way back except clearing storage by hand.
++function loadHidden() {
++  try {
++    const raw = JSON.parse(localStorage.getItem('hidden') || '[]');
++    return new Set(Array.isArray(raw) ? raw : []);
++  } catch {
++    return new Set();
++  }
++}
++
+ const S = {
+   data: null,
+   view: localStorage.getItem('view') || 'upcoming',
+   anchor: new Date(),              // reference date for day/week views
+-  hidden: new Set(JSON.parse(localStorage.getItem('hidden') || '[]')),
++  hidden: loadHidden(),
+   loading: false,
+ };
+ 
+-- 
+2.43.0
+

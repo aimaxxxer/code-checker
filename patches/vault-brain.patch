@@ -1,0 +1,196 @@
+From 7b31f443f08d3eedee954baa3cc4a79bcae11063 Mon Sep 17 00:00:00 2001
+From: "Owen (via Claude Code)" <amasoonog@gmail.com>
+Date: Fri, 18 Sep 2026 17:13:48 +0000
+Subject: [PATCH] Stop tracking the API tokens; load config through one guarded
+ loader
+
+config.json carried two live Obsidian Local REST API bearer tokens and was
+committed, even though .gitignore has a 'never commit' section. Untrack it,
+ship config.example.json with placeholders, and route all five entrypoints
+through load-config.js, which also accepts VAULT_BRAIN_TOKEN,
+VAULT_BRAIN_UPSTREAM_TOKEN and VAULT_BRAIN_VAULT_PATH so a real token never
+has to sit on disk. A fresh clone now fails with an instruction instead of
+ENOENT.
+
+The tokens remain in this repo's history and should be rotated in Obsidian.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018e7RTNjjvqCLb4X1QyVZTp
+---
+ .gitignore          |  3 +++
+ config.example.json | 10 +++++++++
+ load-config.js      | 53 +++++++++++++++++++++++++++++++++++++++++++++
+ mcp-stdio.js        |  2 +-
+ server.js           |  2 +-
+ test-dashboard.js   |  2 +-
+ test-stdio.js       |  2 +-
+ test.js             |  2 +-
+ 8 files changed, 71 insertions(+), 5 deletions(-)
+ create mode 100644 config.example.json
+ create mode 100644 load-config.js
+
+diff --git a/.gitignore b/.gitignore
+index 2f67288..b8f74f8 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -27,3 +27,6 @@ tokens.json
+ secrets.json
+ .browser/
+ cookies.json
++
++# Local credentials: real tokens live here, never in git.
++config.json
+diff --git a/config.example.json b/config.example.json
+new file mode 100644
+index 0000000..21ec4e4
+--- /dev/null
++++ b/config.example.json
+@@ -0,0 +1,10 @@
++{
++  "vaultPath": "C:/Ai maxxer",
++  "host": "127.0.0.1",
++  "port": 27125,
++  "token": "replace-me",
++  "upstream": {
++    "url": "https://127.0.0.1:27124/mcp/",
++    "token": "replace-me"
++  }
++}
+diff --git a/load-config.js b/load-config.js
+new file mode 100644
+index 0000000..aaa3106
+--- /dev/null
++++ b/load-config.js
+@@ -0,0 +1,53 @@
++'use strict';
++// Single place that turns config.json into the CFG object every entrypoint uses.
++//
++// The tokens are credentials, so config.json is no longer tracked in git. A
++// fresh clone starts from config.example.json, and either value can be
++// overridden from the environment, which is what CI and the two-machine setup
++// use so a real token never has to sit on disk.
++const fs = require('fs');
++const path = require('path');
++
++const HERE = __dirname;
++const REAL = path.join(HERE, 'config.json');
++const EXAMPLE = path.join(HERE, 'config.example.json');
++const PLACEHOLDER = 'replace-me';
++
++function load() {
++  let file = REAL;
++  if (!fs.existsSync(file)) {
++    if (!fs.existsSync(EXAMPLE)) {
++      throw new Error(
++        'Vault Brain has no config.json and no config.example.json next to ' +
++        HERE + '. Copy config.example.json to config.json and put your ' +
++        'Obsidian Local REST API tokens in it.'
++      );
++    }
++    file = EXAMPLE;
++  }
++
++  let cfg;
++  try {
++    cfg = JSON.parse(fs.readFileSync(file, 'utf8'));
++  } catch (err) {
++    throw new Error('Could not read ' + file + ': ' + err.message);
++  }
++
++  cfg.upstream = cfg.upstream || {};
++  if (process.env.VAULT_BRAIN_TOKEN) cfg.token = process.env.VAULT_BRAIN_TOKEN;
++  if (process.env.VAULT_BRAIN_UPSTREAM_TOKEN) {
++    cfg.upstream.token = process.env.VAULT_BRAIN_UPSTREAM_TOKEN;
++  }
++  if (process.env.VAULT_BRAIN_VAULT_PATH) cfg.vaultPath = process.env.VAULT_BRAIN_VAULT_PATH;
++
++  if (!cfg.token || cfg.token === PLACEHOLDER) {
++    throw new Error(
++      'Vault Brain has no access token. Put the Obsidian Local REST API token ' +
++      'in config.json, or set VAULT_BRAIN_TOKEN. (Read it from Obsidian: ' +
++      'Settings -> Local REST API.)'
++    );
++  }
++  return cfg;
++}
++
++module.exports = load;
+diff --git a/mcp-stdio.js b/mcp-stdio.js
+index 9e51acd..fc422e4 100644
+--- a/mcp-stdio.js
++++ b/mcp-stdio.js
+@@ -37,7 +37,7 @@ const path = require('path');
+ const { spawn } = require('child_process');
+ 
+ const HERE = __dirname;
+-const CFG = JSON.parse(fs.readFileSync(path.join(HERE, 'config.json'), 'utf8'));
++const CFG = require('./load-config')();
+ const PORT = CFG.port || 27125;
+ const HOST = CFG.host || '127.0.0.1';
+ const TOKEN = CFG.token || '';
+diff --git a/server.js b/server.js
+index 752f0a4..e913c8d 100644
+--- a/server.js
++++ b/server.js
+@@ -19,7 +19,7 @@ const crypto = require('crypto');
+ const dashboard = require('./dashboard');
+ 
+ const HERE = __dirname;
+-const CFG = JSON.parse(fs.readFileSync(path.join(HERE, 'config.json'), 'utf8'));
++const CFG = require('./load-config')();
+ const TOOLS = JSON.parse(fs.readFileSync(path.join(HERE, 'tools.json'), 'utf8'));
+ 
+ const VAULT = path.resolve(CFG.vaultPath);
+diff --git a/test-dashboard.js b/test-dashboard.js
+index 1d009fa..bcf1ab8 100644
+--- a/test-dashboard.js
++++ b/test-dashboard.js
+@@ -14,7 +14,7 @@ const http = require('http');
+ const fs = require('fs');
+ const path = require('path');
+ 
+-const CFG = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
++const CFG = require('./load-config')();
+ const PORT = CFG.port || 27125;
+ const HOST = '127.0.0.1';
+ const VAULT = path.resolve(CFG.vaultPath);
+diff --git a/test-stdio.js b/test-stdio.js
+index 626ca4b..8ee3f44 100644
+--- a/test-stdio.js
++++ b/test-stdio.js
+@@ -21,7 +21,7 @@ const fs = require('fs');
+ const path = require('path');
+ 
+ const HERE = __dirname;
+-const CFG = JSON.parse(fs.readFileSync(path.join(HERE, 'config.json'), 'utf8'));
++const CFG = require('./load-config')();
+ const TOOLS = JSON.parse(fs.readFileSync(path.join(HERE, 'tools.json'), 'utf8'));
+ const PORT = CFG.port || 27125;
+ const HOST = CFG.host || '127.0.0.1';
+diff --git a/test.js b/test.js
+index 74e8fde..d97d635 100644
+--- a/test.js
++++ b/test.js
+@@ -13,7 +13,7 @@ const http = require('http');
+ const https = require('https');
+ 
+ const HERE = __dirname;
+-const CFG = JSON.parse(fs.readFileSync(path.join(HERE, 'config.json'), 'utf8'));
++const CFG = require('./load-config')();
+ const VAULT = path.resolve(CFG.vaultPath);
+ const SOLO = process.argv.indexOf('--solo') !== -1;
+ 
+-- 
+2.43.0
+
+
+--
+NOTE: this patch leaves out one part of the commit it came from, the removal
+of config.json, because that diff quotes both live tokens as removed lines and
+reproducing it here would re-publish exactly what the fix exists to remove.
+Untrack the file by hand:
+
+    git rm --cached config.json
+
+Then rotate both tokens in Obsidian (Settings -> Local REST API). They remain
+in vault-brain's history, so untracking alone does not retire them.

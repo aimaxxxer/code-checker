@@ -1,0 +1,38 @@
+From 8b7472b738d54fcb00e7ab83f102a5fd3823471a Mon Sep 17 00:00:00 2001
+From: "Owen (via Claude Code)" <amasoonog@gmail.com>
+Date: Fri, 18 Sep 2026 17:13:49 +0000
+Subject: [PATCH] Guard the localStorage read in opvolging the way verkoopweek
+ does
+
+An unparseable value threw at load and left the page blank; a stored 'null'
+parsed fine and then failed on first property access. Wrap it and reject
+anything that is not a plain object, matching verkoopweek.html.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018e7RTNjjvqCLb4X1QyVZTp
+---
+ opvolging.html | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/opvolging.html b/opvolging.html
+index b0db295..3c8df09 100644
+--- a/opvolging.html
++++ b/opvolging.html
+@@ -184,7 +184,13 @@ var PLAY = [
+ ];
+ 
+ var KEY="opvolging_v1";
+-var S = JSON.parse(localStorage.getItem(KEY) || "{}");
++// Guarded the same way verkoopweek.html does: a corrupt entry used to throw
++// here and leave the page blank instead of just starting fresh.
++var S;
++try {
++  S = JSON.parse(localStorage.getItem(KEY) || "{}");
++  if (!S || typeof S !== "object" || Array.isArray(S)) S = {};
++} catch(e) { S = {}; }
+ function save(){localStorage.setItem(KEY,JSON.stringify(S))}
+ function st(id){ if(!S[id]) S[id]={sent:null,f1:null,f2:null,reply:false,dead:false}; return S[id] }
+ function today(){var d=new Date();d.setHours(0,0,0,0);return d}
+-- 
+2.43.0
+

@@ -1,0 +1,50 @@
+From b3e4ff570d867c0271b78b459b31a72e85b4d838 Mon Sep 17 00:00:00 2001
+From: "Owen (via Claude Code)" <amasoonog@gmail.com>
+Date: Fri, 18 Sep 2026 17:13:48 +0000
+Subject: [PATCH] Do not start a real run on --help or a typo'd flag
+
+Anything that was not --check or --status fell through into main(), so
+'node src/run.js --help' began searching for work, messaging Discord and
+spending model budget. Print usage for --help and refuse unknown flags; a
+bare run is unchanged.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018e7RTNjjvqCLb4X1QyVZTp
+---
+ src/run.js | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/src/run.js b/src/run.js
+index 660c103..a1e16d6 100644
+--- a/src/run.js
++++ b/src/run.js
+@@ -353,10 +353,26 @@ function status() {
+ 
+ /* ── main ────────────────────────────────────────────────────────────────── */
+ 
++const USAGE = `Gig Agent - finds paid freelance work and asks you in Discord.
++
++  node src/run.js            do a full run (search, ask, build, hand over)
++  node src/run.js --check    check the setup without running anything
++  node src/run.js --status   show what has been seen and handed over
++  node src/run.js --help     show this message
++`;
++
+ async function main() {
+   const arg = process.argv[2];
+   if (arg === '--check') return check();
+   if (arg === '--status') return status();
++  if (arg === '--help' || arg === '-h') { console.log(USAGE); return 0; }
++  if (arg !== undefined && arg.startsWith('-')) {
++    // Falling through to a real run on a typo'd flag would start searching,
++    // messaging Discord and spending model budget. Refuse instead.
++    console.error(`Gig Agent: unknown option "${arg}"\n`);
++    console.error(USAGE);
++    return 2;
++  }
+ 
+   log('run start');
+ 
+-- 
+2.43.0
+

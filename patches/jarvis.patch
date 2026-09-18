@@ -1,0 +1,48 @@
+From 46de287f91f48d66db46d182bfcb2962c3a03d7b Mon Sep 17 00:00:00 2001
+From: "Owen (via Claude Code)" <amasoonog@gmail.com>
+Date: Fri, 18 Sep 2026 17:13:49 +0000
+Subject: [PATCH] Ignore SQLite side files; untrack the committed WAL
+
+.gitignore covers *.db, but jarvis.db-shm and jarvis.db-wal do not match that
+pattern and were tracked. The WAL is 4 MB and holds rows from income,
+investments, habit_log and marktplaats_messages, so the database the *.db rule
+exists to keep out of the repo was being committed alongside it, and churned
+on every run. Ignore the -shm/-wal/-journal side files and untrack both.
+
+They remain in this repo's history.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018e7RTNjjvqCLb4X1QyVZTp
+---
+ .gitignore | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/.gitignore b/.gitignore
+index 3c5c0c7..432fa53 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -32,4 +32,12 @@ cookies.json
+ *.db
+ *.sqlite
+ *.sqlite3
++# SQLite's side files do not match *.db, so they slipped through and were
++# committed - the -wal carries the same rows the *.db rule exists to keep out.
++*.db-shm
++*.db-wal
++*.db-journal
++*.sqlite-shm
++*.sqlite-wal
++*.sqlite-journal
+ _backup-*/
+-- 
+2.43.0
+
+
+--
+NOTE: this patch carries only the .gitignore change. The commit it came from
+also untracked two files, deliberately left out here because the -wal is a
+4 MB binary holding rows from income, investments, habit_log and
+marktplaats_messages -- embedding it in this patch would re-publish the data
+the fix exists to remove. Apply the untracking by hand:
+
+    git rm --cached server/jarvis.db-shm server/jarvis.db-wal

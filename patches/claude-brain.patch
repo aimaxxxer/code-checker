@@ -1,0 +1,54 @@
+From ef58ec1fa40d98314d2cebe5a918b28659191d45 Mon Sep 17 00:00:00 2001
+From: "Owen (via Claude Code)" <amasoonog@gmail.com>
+Date: Fri, 18 Sep 2026 17:13:48 +0000
+Subject: [PATCH] Fix stale shadcn version assertion and cover version
+ resolution
+
+The installer moved from a hardcoded shadcn@latest to _get_shadcn_version(),
+which reads the pin from package.json and falls back to 2.3.0, but the test
+still asserted shadcn@latest, so the suite failed. Assert the resolved version
+instead, and add the two cases that were untested: the package.json pin and
+the fallback.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018e7RTNjjvqCLb4X1QyVZTp
+---
+ .../ui-styling/scripts/tests/test_shadcn_add.py   | 15 ++++++++++++++-
+ 1 file changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/skills/ui-styling/scripts/tests/test_shadcn_add.py b/skills/ui-styling/scripts/tests/test_shadcn_add.py
+index 03c8f31..583258f 100644
+--- a/skills/ui-styling/scripts/tests/test_shadcn_add.py
++++ b/skills/ui-styling/scripts/tests/test_shadcn_add.py
+@@ -153,6 +153,19 @@ class TestShadcnInstaller:
+         assert "button" in message
+         assert "card" in message
+ 
++    def test_get_shadcn_version_falls_back_when_no_package_json(self, temp_project):
++        """With no package.json the pinned fallback version is used."""
++        installer = ShadcnInstaller(project_root=temp_project)
++        assert installer._get_shadcn_version() == "2.3.0"
++
++    def test_get_shadcn_version_reads_package_json(self, temp_project):
++        """A shadcn pin in package.json wins over the fallback."""
++        (temp_project / "package.json").write_text(
++            json.dumps({"devDependencies": {"shadcn": "^2.1.4"}})
++        )
++        installer = ShadcnInstaller(project_root=temp_project)
++        assert installer._get_shadcn_version() == "2.1.4"
++
+     @patch("subprocess.run")
+     def test_add_components_success(self, mock_run, temp_project):
+         """Test successful component addition."""
+@@ -173,7 +186,7 @@ class TestShadcnInstaller:
+         # Verify correct command was called
+         mock_run.assert_called_once()
+         call_args = mock_run.call_args[0][0]
+-        assert call_args[:3] == ["npx", "shadcn@latest", "add"]
++        assert call_args[:3] == ["npx", "shadcn@2.3.0", "add"]
+         assert "button" in call_args
+         assert "card" in call_args
+ 
+-- 
+2.43.0
+

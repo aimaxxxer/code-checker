@@ -1,0 +1,41 @@
+From 563ffd54f746596de83b98467471cbb7f6946439 Mon Sep 17 00:00:00 2001
+From: "Owen (via Claude Code)" <amasoonog@gmail.com>
+Date: Fri, 18 Sep 2026 17:13:49 +0000
+Subject: [PATCH] Make the paper-trading value fallback reachable
+
+value used '?? b.capital' after an arithmetic operand. Arithmetic is never
+null or undefined, so that fallback could not fire, and a sleeve missing
+cash or units produced NaN for value, profit and returnPct all the way into
+the UI. NaN from markToMarket slipped through for the same reason. Fall back
+on anything that is not a finite number.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018e7RTNjjvqCLb4X1QyVZTp
+---
+ paper.js | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/paper.js b/paper.js
+index a449965..2737bac 100644
+--- a/paper.js
++++ b/paper.js
+@@ -195,7 +195,15 @@ async function summary() {
+ 
+     const sleeves = E.STRATEGY_LIST.map(s => {
+       const sl = book.sleeves[s.id] || freshSleeve(b.capital);
+-      const value = sl.markToMarket ?? (sl.cash + sl.units * (book.lastPrice || 0)) ?? b.capital;
++      // `??` only falls through on null/undefined, so the arithmetic middle
++      // operand always won and the `b.capital` fallback was unreachable. A
++      // sleeve missing cash/units then produced NaN money all the way to the
++      // UI. Fall back on anything that is not a finite number instead.
++      const marked = sl.markToMarket;
++      const computed = sl.cash + sl.units * (book.lastPrice || 0);
++      const value = Number.isFinite(marked) ? marked
++                  : Number.isFinite(computed) ? computed
++                  : b.capital;
+       return {
+         strategy: s.id, name: s.name, blurb: s.blurb,
+         value: Number(value.toFixed(2)),
+-- 
+2.43.0
+

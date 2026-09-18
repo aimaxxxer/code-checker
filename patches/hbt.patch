@@ -1,0 +1,59 @@
+From c15fa3f179e7aad45399d68b1e5fd8a35be14fe0 Mon Sep 17 00:00:00 2001
+From: "Owen (via Claude Code)" <amasoonog@gmail.com>
+Date: Fri, 18 Sep 2026 17:13:48 +0000
+Subject: [PATCH] Handle --help instead of silently starting a server
+
+Only --no-browser was recognised. Every other argument, including the
+conventional --help, fell through and launched the server on port 7474, so
+asking for help started an app the user then had to Ctrl-C. Print usage for
+-h/--help and exit 2 on an unknown option.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018e7RTNjjvqCLb4X1QyVZTp
+---
+ hbt/__main__.py | 33 +++++++++++++++++++++++++++++++--
+ 1 file changed, 31 insertions(+), 2 deletions(-)
+
+diff --git a/hbt/__main__.py b/hbt/__main__.py
+index b7aeaf4..7e8c4f2 100644
+--- a/hbt/__main__.py
++++ b/hbt/__main__.py
+@@ -1,4 +1,33 @@
+ import sys
+-from .server import main
+ 
+-sys.exit(main(open_browser="--no-browser" not in sys.argv))
++from .server import HOST, PORT, main
++
++USAGE = """hbt - goal and habit tracker
++
++  python3 -m hbt                start the app and open it in your browser
++  python3 -m hbt --no-browser   start it without opening a browser
++  python3 -m hbt --help         show this message
++
++It serves on http://%s:%d/ and stores your data in ~/.hbt/store.json.
++Press Ctrl-C to stop it.""" % (HOST, PORT)
++
++KNOWN = {"--no-browser", "-h", "--help"}
++
++
++def cli(argv):
++    args = argv[1:]
++    if "-h" in args or "--help" in args:
++        print(USAGE)
++        return 0
++    unknown = [a for a in args if a not in KNOWN]
++    if unknown:
++        # Anything unrecognised used to be ignored, which silently started a
++        # server when the user asked for something else.
++        print("hbt: unknown option(s): %s\n" % " ".join(unknown), file=sys.stderr)
++        print(USAGE, file=sys.stderr)
++        return 2
++    return main(open_browser="--no-browser" not in args)
++
++
++if __name__ == "__main__":
++    sys.exit(cli(sys.argv))
+-- 
+2.43.0
+

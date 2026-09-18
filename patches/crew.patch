@@ -1,0 +1,42 @@
+From e00775625c6a8251e6e470b49fc08e9a72c7da3c Mon Sep 17 00:00:00 2001
+From: "Owen (via Claude Code)" <amasoonog@gmail.com>
+Date: Fri, 18 Sep 2026 17:13:48 +0000
+Subject: [PATCH] Do not let the browser-open timer throw from a background
+ thread
+
+The convenience call that opens the tab ran unguarded inside threading.Timer,
+so a missing or refusing 'open' dumped a traceback into the user's terminal
+while the server was in fact running fine. The sibling call a few lines above
+was already wrapped; match it and report the failure in one line.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018e7RTNjjvqCLb4X1QyVZTp
+---
+ server.py | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/server.py b/server.py
+index 261a997..b8b60af 100644
+--- a/server.py
++++ b/server.py
+@@ -1155,7 +1155,16 @@ def main():
+     write_json(os.path.join(DATA_DIR, "port.json"), {"port": port, "url": url})
+ 
+     if os.environ.get("CREW_OPEN", "1") == "1":
+-        threading.Timer(0.7, lambda: subprocess.run(["open", url])).start()
++        def open_browser():
++            # Opening the tab is a convenience, not part of serving. If `open`
++            # is missing or refuses, the server is still up, so swallow it
++            # rather than dumping a traceback from a background thread.
++            try:
++                subprocess.run(["open", url])
++            except Exception as exc:
++                print("  (could not open a browser automatically: %s)" % exc)
++
++        threading.Timer(0.7, open_browser).start()
+ 
+     def shutdown(*_):
+         print("\n  shutting down, handing the RAM back...")
+-- 
+2.43.0
+
