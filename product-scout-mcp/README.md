@@ -16,13 +16,19 @@ one needs, and what is realistically obtainable.
 
 ---
 
+**New to this? Read [SETUP.md](SETUP.md)** — the same thing with nothing assumed,
+including where to click and what each key is for.
+
 ## Quickstart
 
 ```bash
 git clone <your-repo-url> product-scout-mcp
 cd product-scout-mcp
-uv venv && uv pip install -e .
+bash scripts/setup.sh
 ```
+
+That installs everything, verifies it runs, and prints the exact config block for
+your machine. It is safe to re-run at any time.
 
 Run it with no credentials at all to see the output shape (synthetic data,
 clearly labelled):
