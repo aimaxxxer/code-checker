@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "product-scout": {
+      "command": "/absolute/path/to/product-scout-mcp/.venv/bin/python",
+      "args": ["-m", "product_scout.server"],
+      "env": {
+        "ALIEXPRESS_APP_KEY": "",
+        "ALIEXPRESS_APP_SECRET": "",
+        "ALIEXPRESS_TRACKING_ID": "default",
+        "SERPAPI_KEY": "",
+        "APIFY_TOKEN": "",
+        "PRODUCT_SCOUT_MARKET": "US"
+      }
+    }
+  }
+}
